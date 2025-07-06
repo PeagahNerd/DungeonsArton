@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Masmorras em Arton</title>
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#991b1b"/>
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .adventure-content h3 {
+            font-size: 1.25rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.5rem;
+            border-bottom: 2px solid #e5e7eb; padding-bottom: 0.25rem; color: #991b1b;
+        }
+        .adventure-content h4 {
+            font-size: 1.1rem; font-weight: 600; margin-top: 1.25rem; color: #1f2937;
+        }
+        .adventure-content .area-block {
+            margin-bottom: 2rem;
+            padding-left: 1rem;
+            border-left: 3px solid #fca5a5;
+        }
+        .adventure-content .area-block p { margin-bottom: 0.5rem; }
+        .adventure-content .area-block strong { color: #374151; }
+
+        #map-grid {
+            display: grid;
+            grid-template-columns: repeat(32, 1fr);
+            gap: 0;
+            border: 2px solid #111827;
+            background-color: #111827;
+            aspect-ratio: 1 / 0.7;
+        }
+        .map-cell {
+            background-color: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1 / 1;
+            position: relative;
+        }
+        .map-cell.floor { background-color: #ffffff; border: 1px solid #e5e7eb; }
+        .map-cell .number {
+            font-size: 0.8rem; font-weight: bold; color: #be123c;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 0 2px;
+            border-radius: 2px;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6 md:p-8">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Gerador de Masmorras (Estilo Donjon)</h1>
+            <p class="text-gray-600 mt-2">Crie dungeons detalhadas em Arton para suas sessões de 3D&T!</p>
+        </header>
+
+        <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <button id="generate-btn" class="w-full bg-red-800 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-red-900 transition-all duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-dices"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M16 8h.01"/><path d="M16 16h.01"/><path d="M8 8h.01"/><path d="M8 16h.01"/><path d="M12 12h.01"/></svg>
+                Gerar Nova Masmorra
+            </button>
+            <button id="export-pdf-btn" class="w-full bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-gray-700 transition-all duration-300 ease-in-out flex items-center justify-center gap-2" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                Exportar para PDF
+            </button>
+        </div>
+        
+        <div id="loading" class="text-center p-8" style="display: none;">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-red-800 mx-auto"></div>
+            <p class="mt-4 font-semibold text-gray-700">Desenhando sua masmorra... Isso pode levar um momento.</p>
+        </div>
+
+        <div id="adventure-output" class="bg-white p-6 sm:p-8 rounded-xl shadow-lg" style="display: none;">
+            <div id="adventure-container">
+                <h2 id="adventure-title" class="text-2xl sm:text-3xl font-bold text-red-900 mb-4 text-center"></h2>
+                <p id="adventure-intro" class="text-gray-700 italic mb-6"></p>
+                
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-3">Mapa da Masmorra</h3>
+                    <div id="map-grid-container" class="p-4 bg-gray-200 rounded-lg">
+                       <div id="map-grid"></div>
+                    </div>
+                </div>
+                
+                <div id="adventure-content" class="adventure-content">
+                    <!-- O conteúdo gerado será inserido aqui -->
+                </div>
+            </div>
+        </div>
+        
+        <div id="welcome-message" class="text-center bg-white p-8 rounded-xl shadow-lg">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Pronto para a Exploração?</h2>
+            <p class="text-gray-600">As profundezas de Arton escondem ruínas antigas e covis de monstros terríveis. Clique em "Gerar Nova Masmorra" para criar um labirinto mortal, com mapas detalhados, monstros, tesouros e um chefe final aterrorizante. Perfeito para uma sessão de 3D&T cheia de ação!</p>
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+
+        const generateBtn = document.getElementById('generate-btn');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+        const loadingDiv = document.getElementById('loading');
+        const adventureOutputDiv = document.getElementById('adventure-output');
+        const welcomeMessageDiv = document.getElementById('welcome-message');
+        
+        const adventureTitleEl = document.getElementById('adventure-title');
+        const adventureIntroEl = document.getElementById('adventure-intro');
+        const adventureContentEl = document.getElementById('adventure-content');
+        const mapGridEl = document.getElementById('map-grid');
+
+        // --- Gemini API Call ---
+        async function generateAdventure() {
+            welcomeMessageDiv.style.display = 'none';
+            adventureOutputDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            generateBtn.disabled = true;
+            generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const prompt = `
+                Aja como um gerador de masmorras no estilo do site Donjon. Crie uma masmorra completa para o sistema 3D&T Alpha, ambientada em Arton.
+                A masmorra deve ser uma aventura 'one-shot'. Gere o conteúdo em português do Brasil.
+                A resposta DEVE ser um objeto JSON seguindo o schema abaixo.
+
+                A masmorra deve conter:
+                1.  Um título criativo.
+                2.  Uma introdução (gancho da aventura).
+                3.  Uma lista de 6 a 8 áreas numeradas. Cada área DEVE ter uma estrutura detalhada:
+                    - details: Descrição geral da sala, dimensões, cheiros, sons.
+                    - monsters_in_area: Descrição dos monstros presentes (ou "Nenhum").
+                    - treasure_in_area: Descrição do tesouro encontrado (ou "Nenhum").
+                    - features: Descrição de objetos ou características notáveis (móveis, estátuas, etc.).
+                    - exits: Descrição das saídas e para onde levam (ex: "Porta de madeira ao norte leva para a área 2").
+                4.  Um subchefe, com descrição, ficha 3D&T e sua localização (area_id).
+                5.  Um chefe final, com descrição, ficha 3D&T e sua localização (area_id).
+                6.  Recompensas ao final da masmorra, incluindo Tibares de Ouro (T$) e tesouros.
+            `;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    title: { type: "STRING" },
+                    introduction: { type: "STRING" },
+                    areas: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                id: { type: "NUMBER" },
+                                name: { type: "STRING" },
+                                details: { type: "STRING" },
+                                monsters_in_area: { type: "STRING" },
+                                treasure_in_area: { type: "STRING" },
+                                features: { type: "STRING" },
+                                exits: { type: "STRING" }
+                            },
+                            required: ["id", "name", "details", "monsters_in_area", "treasure_in_area", "features", "exits"]
+                        }
+                    },
+                    sub_boss: {
+                        type: "OBJECT", properties: { name: { type: "STRING" }, description: { type: "STRING" }, stats: { type: "STRING" }, area_id: { type: "NUMBER" } },
+                        required: ["name", "description", "stats", "area_id"]
+                    },
+                    final_boss: {
+                        type: "OBJECT", properties: { name: { type: "STRING" }, description: { type: "STRING" }, stats: { type: "STRING" }, area_id: { type: "NUMBER" } },
+                        required: ["name", "description", "stats", "area_id"]
+                    },
+                    rewards: {
+                        type: "OBJECT", properties: { gold: { type: "STRING" }, special: { type: "STRING" } },
+                        required: ["gold", "special"]
+                    }
+                },
+                required: ["title", "introduction", "areas", "sub_boss", "final_boss", "rewards"]
+            };
+
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+                };
+                const apiKey = ""; // Handled by environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+                if (!response.ok) { throw new Error(`API call failed with status: ${response.status}`); }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0) {
+                    const jsonText = result.candidates[0].content.parts[0].text;
+                    const adventureData = JSON.parse(jsonText);
+                    displayAdventure(adventureData);
+                } else { throw new Error("Resposta da API inválida ou vazia."); }
+
+            } catch (error) {
+                console.error("Erro ao gerar masmorra:", error);
+                adventureOutputDiv.style.display = 'block';
+                adventureContentEl.innerHTML = `<p class="text-red-500 text-center">Ocorreu um erro ao desenhar a masmorra. Por favor, tente novamente.</p>`;
+            } finally {
+                loadingDiv.style.display = 'none';
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // --- Display Logic ---
+        function displayAdventure(data) {
+            adventureTitleEl.textContent = data.title;
+            adventureIntroEl.textContent = data.introduction;
+            
+            let contentHTML = '<h3>Áreas da Masmorra</h3>';
+            data.areas.sort((a, b) => a.id - b.id).forEach(area => {
+                contentHTML += `<div class="area-block">`;
+                contentHTML += `<h4>${area.id}. ${area.name}</h4>`;
+                contentHTML += `<p><strong>Detalhes:</strong> ${area.details}</p>`;
+                contentHTML += `<p><strong>Monstros:</strong> ${area.monsters_in_area}</p>`;
+                contentHTML += `<p><strong>Tesouro:</strong> ${area.treasure_in_area}</p>`;
+                contentHTML += `<p><strong>Características:</strong> ${area.features}</p>`;
+                contentHTML += `<p><strong>Saídas:</strong> ${area.exits}</p>`;
+                contentHTML += `</div>`;
+            });
+
+            contentHTML += `<h3>Subchefe</h3>`;
+            contentHTML += `<div class="area-block"><h4>${data.sub_boss.name} (Encontrado na área ${data.sub_boss.area_id})</h4><p>${data.sub_boss.description}</p><p><strong>Ficha 3D&T:</strong> ${data.sub_boss.stats}</p></div>`;
+            
+            contentHTML += `<h3>Chefe Final</h3>`;
+            contentHTML += `<div class="area-block"><h4>${data.final_boss.name} (Encontrado na área ${data.final_boss.area_id})</h4><p>${data.final_boss.description}</p><p><strong>Ficha 3D&T:</strong> ${data.final_boss.stats}</p></div>`;
+
+            contentHTML += '<h3>Recompensas</h3>';
+            contentHTML += `<div class="area-block"><p><strong>Ouro:</strong> ${data.rewards.gold}</p>`;
+            contentHTML += `<p><strong>Tesouros Especiais:</strong> ${data.rewards.special}</p></div>`;
+
+            adventureContentEl.innerHTML = contentHTML;
+            
+            generateDungeonMap(data.areas);
+
+            adventureOutputDiv.style.display = 'block';
+            exportPdfBtn.style.display = 'flex';
+        }
+
+        // --- New Procedural Map Generation (Room Placement) ---
+        function generateDungeonMap(areas) {
+            mapGridEl.innerHTML = '';
+            const COLS = 32;
+            const ROWS = 22;
+            const MAX_ROOMS = areas.length;
+            const ROOM_SIZE_MIN = 3;
+            const ROOM_SIZE_MAX = 6;
+            const MAX_ATTEMPTS = 200;
+
+            const grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(0)); // 0: wall, 1: floor, 2: door
+            const rooms = [];
+
+            function carveRoom(room) {
+                for (let y = room.y; y < room.y + room.h; y++) {
+                    for (let x = room.x; x < room.x + room.w; x++) {
+                        grid[y][x] = 1;
+                    }
+                }
+            }
+
+            function carveCorridor(x1, y1, x2, y2) {
+                const hCorridor = (startX, endX, y) => {
+                    for (let x = Math.min(startX, endX); x <= Math.max(startX, endX); x++) {
+                        if (grid[y][x] === 0) grid[y][x] = 1;
+                    }
+                };
+                const vCorridor = (startY, endY, x) => {
+                    for (let y = Math.min(startY, endY); y <= Math.max(startY, endY); y++) {
+                         if (grid[y][x] === 0) grid[y][x] = 1;
+                    }
+                };
+
+                if (Math.random() > 0.5) {
+                    hCorridor(x1, x2, y1);
+                    vCorridor(y1, y2, x2);
+                } else {
+                    vCorridor(y1, y2, x1);
+                    hCorridor(x1, x2, y2);
+                }
+            }
+            
+            for (let i = 0; i < MAX_ATTEMPTS && rooms.length < MAX_ROOMS; i++) {
+                const w = Math.floor(Math.random() * (ROOM_SIZE_MAX - ROOM_SIZE_MIN + 1)) + ROOM_SIZE_MIN;
+                const h = Math.floor(Math.random() * (ROOM_SIZE_MAX - ROOM_SIZE_MIN + 1)) + ROOM_SIZE_MIN;
+                const x = Math.floor(Math.random() * (COLS - w - 2)) + 1;
+                const y = Math.floor(Math.random() * (ROWS - h - 2)) + 1;
+
+                const newRoom = { x, y, w, h };
+                let overlaps = false;
+                for (const room of rooms) {
+                    if (x < room.x + room.w && x + w > room.x && y < room.y + room.h && y + h > room.y) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if (!overlaps) {
+                    carveRoom(newRoom);
+                    const center = { x: Math.floor(x + w / 2), y: Math.floor(y + h / 2) };
+                    newRoom.center = center;
+                    
+                    if (rooms.length > 0) {
+                        const prevCenter = rooms[rooms.length - 1].center;
+                        carveCorridor(center.x, center.y, prevCenter.x, prevCenter.y);
+                    }
+                    rooms.push(newRoom);
+                }
+            }
+
+            // Create cell elements
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('map-cell');
+                    if (grid[y][x] === 1) {
+                        cell.classList.add('floor');
+                    }
+                    mapGridEl.appendChild(cell);
+                }
+            }
+            
+            // Place numbers in rooms
+            rooms.forEach((room, index) => {
+                const area = areas[index];
+                if (!area) return;
+                const cellIndex = room.center.y * COLS + room.center.x;
+                const cellEl = mapGridEl.children[cellIndex];
+                if (cellEl) {
+                    const numberSpan = document.createElement('span');
+                    numberSpan.className = 'number';
+                    numberSpan.textContent = area.id;
+                    cellEl.appendChild(numberSpan);
+                }
+            });
+        }
+
+        // --- PDF Export ---
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const adventureContainer = document.getElementById('adventure-container');
+            const title = adventureTitleEl.textContent || "Masmorra_em_Arton";
+            
+            const originalBtnText = exportPdfBtn.innerHTML;
+            exportPdfBtn.innerHTML = 'Exportando...';
+            exportPdfBtn.disabled = true;
+
+            try {
+                const canvas = await html2canvas(adventureContainer, {
+                    scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff'
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+                
+                const imgPdfWidth = pdfWidth - 20;
+                let imgPdfHeight = imgPdfWidth / ratio;
+                let heightLeft = imgPdfHeight;
+                let position = 10;
+
+                pdf.addImage(imgData, 'PNG', 10, position, imgPdfWidth, imgPdfHeight);
+                heightLeft -= (pdfHeight - 20);
+
+                while (heightLeft > 0) {
+                    position = position - (pdfHeight - 20);
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position, imgPdfWidth, imgPdfHeight);
+                    heightLeft -= (pdfHeight - 20);
+                }
+
+                pdf.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
+
+            } catch (error) {
+                console.error("Erro ao exportar PDF:", error);
+                alert("Não foi possível gerar o PDF. Verifique o console para mais detalhes.");
+            } finally {
+                exportPdfBtn.innerHTML = originalBtnText;
+                exportPdfBtn.disabled = false;
+            }
+        }
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', generateAdventure);
+        exportPdfBtn.addEventListener('click', exportToPDF);
+    </script>
+
+</body>
+</html>
